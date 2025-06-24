@@ -1,0 +1,44 @@
+[package]
+name = "octomind-ui"
+version = "0.1.0"
+edition = "2021"
+description = "Modern native macOS desktop application for Octomind CLI sessions"
+authors = ["Muvon Un Limited"]
+license = "Apache-2.0"
+repository = "https://github.com/muvon/octomind"
+keywords = ["tauri", "desktop", "gui", "macos", "ai"]
+categories = ["gui", "development-tools"]
+readme = "README.md"
+
+[[bin]]
+name = "octomind-ui"
+path = "src-tauri/src/main.rs"
+
+[lib]
+name = "octomind_ui"
+path = "src-tauri/src/lib.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["macos-private-api"] }
+tauri-plugin-shell = "2.0"
+tauri-plugin-dialog = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+uuid = { version = "1.0", features = ["v4"] }
+chrono = "0.4"
+clap = { version = "4.5", features = ["derive"] }
+dirs = "6.0"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+# Development and documentation
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

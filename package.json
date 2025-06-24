@@ -1,0 +1,26 @@
+{
+  "name": "octomind-ui",
+  "version": "1.0.0",
+  "description": "A modern native macOS desktop application built with **Tauri v2** that provides a beautiful GUI wrapper for Octomind CLI sessions.",
+  "type": "module",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.1.0",
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/cli": "^2.5.0",
+    "@tauri-apps/plugin-shell": "^2.2.2",
+    "svelte": "^5.34.7",
+    "vite": "^6.3.5"
+  }
+}
