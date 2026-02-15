@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#2d2d50"/>
+  
+  <!-- Robot head -->
+  <rect x="20" y="25" width="60" height="55" rx="12" fill="#46466e"/>
+  
+  <!-- Eyes -->
+  <ellipse cx="35" cy="45" rx="8" ry="6" fill="#1e1e32"/>
+  <ellipse cx="65" cy="45" rx="8" ry="6" fill="#1e1e32"/>
+  
+  <!-- Eye glow -->
+  <circle cx="35" cy="45" r="4" fill="#00ffc8"/>
+  <circle cx="65" cy="45" r="4" fill="#00ffc8"/>
+  
+  <!-- Mouth -->
+  <path d="M 35 60 Q 50 70 65 60" stroke="#00ffc8" stroke-width="3" fill="none"/>
+  
+  <!-- Antenna -->
+  <line x1="50" y1="25" x2="50" y2="12" stroke="#646478" stroke-width="4"/>
+  <circle cx="50" cy="10" r="5" fill="#00ffc8"/>
+</svg>

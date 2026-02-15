@@ -2,7 +2,7 @@
 
 pub mod commands;
 
-use commands::{SessionProcesses, SessionStates};
+use commands::{ServerProcess, SessionStates};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -11,14 +11,12 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(SessionStates::new(HashMap::new()))
-        .manage(SessionProcesses::new(Mutex::new(HashMap::new())))
+        .manage(ServerProcess::new(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
-            commands::get_available_sessions,
+            commands::start_octomind_server,
+            commands::stop_octomind_server,
+            commands::is_server_running,
             commands::create_session_config,
-            commands::resume_session_config,
-            commands::start_session_process,
-            commands::send_message_to_session,
-            commands::stop_session_process,
             commands::get_session_info,
             commands::list_directories,
             commands::select_directory_native,

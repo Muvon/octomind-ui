@@ -1,16 +1,24 @@
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import {
-        currentSessionId,
+        connectionState,
+        serverSessionId,
         currentSessionConfig,
         sessionHistory,
         messages,
-        statusText,
-        isConnected,
-        currentStreamingMessage,
-        streamingBuffer
+        isThinking,
+        thinkingContent,
+        thinkingTokens,
+        sessionCost,
+        sessionTokens,
+        sessionForm,
+        addMessage,
+        clearMessages,
+        resetSession,
+        isReady
     } from './stores.js';
-    import { initializeTauri } from './lib/tauri.js';
+    import * as websocket from './lib/websocket.js';
+    import { startServer, stopServer, isServerRunning } from './lib/tauri.js';
 
     import SessionForm from './components/SessionForm.svelte';
     import SessionList from './components/SessionList.svelte';
@@ -18,164 +26,159 @@
     import ChatArea from './components/ChatArea.svelte';
     import MessageInput from './components/MessageInput.svelte';
 
-    let sessionId = null;
-    let sessionConfig = null;
+    let serverPort = 8080;
+    let serverStatus = 'stopped'; // 'stopped' | 'starting' | 'running'
+    let connectionStatus = 'disconnected';
 
-    currentSessionId.subscribe(value => {
-        sessionId = value;
-        if (value) {
-            enableChat();
-        }
-    });
-
-    currentSessionConfig.subscribe(value => {
-        sessionConfig = value;
-    });
-
-    async function enableChat() {
-        if (!sessionId) return;
-
-        statusText.set('🟡 Starting...');
-
-        try {
-            await initializeTauri();
-
-            if (!window.__TAURI__ || !window.__TAURI__.core || !window.__TAURI__.core.invoke) {
-                throw new Error('Tauri core.invoke not available');
-            }
-
-            const invoke = window.__TAURI__.core.invoke;
-
-            // Start the session process
-            await invoke('start_session_process', {
-                sessionId: sessionId
-            });
-
-            statusText.set('🟢 Connected');
-            isConnected.set(true);
-            messages.update(msgs => [...msgs, {
-                type: 'system',
-                content: '🚀 Session process started. You can now chat with Octomind!'
-            }]);
-
-        } catch (error) {
-            console.error('Failed to start session process:', error);
-            messages.update(msgs => [...msgs, {
-                type: 'error',
-                content: `❌ Failed to start session process: ${error}`
-            }]);
-            statusText.set('🔴 Error');
-            isConnected.set(false);
-        }
-    }
-
-    async function setupSessionEventListeners() {
-        try {
-            await initializeTauri();
-            const { listen } = window.__TAURI__.event;
-
-            // Listen for session output (stdout/stderr)
-            await listen('session_output', (event) => {
-                const { session_id, type, content } = event.payload;
-
-                // Only handle output for the current session
-                if (session_id === sessionId) {
-                    addStreamingOutput(content, type);
+    // Handle WebSocket messages
+    function handleWebSocketMessage(data) {
+        console.log('WS Message:', data);
+        
+        switch (data.type) {
+            case 'status':
+                // Server status message
+                if (data.session_id) {
+                    serverSessionId.set(data.session_id);
+                    // Auto-set session config if not already set (for auto-connect on mount)
+                    currentSessionConfig.update(config => {
+                        if (!config) {
+                            console.log('Auto-setting session config from server session_id');
+                            return {
+                                name: data.session_id,
+                                directory: '/workspace',
+                                role: 'developer',
+                                model: null,
+                                temperature: 0.7,
+                                maxTokens: null
+                            };
+                        }
+                        console.log('Session config already set:', config);
+                        return config;
+                    });
                 }
-            });
-
-            // Listen for session ended events
-            await listen('session_ended', (event) => {
-                const { session_id } = event.payload;
-
-                if (session_id === sessionId) {
-                    messages.update(msgs => [...msgs, {
-                        type: 'system',
-                        content: '🔴 Session process ended'
-                    }]);
-                    statusText.set('🔴 Disconnected');
-                    isConnected.set(false);
+                // Only add status message if it has content
+                if (data.content) {
+                    addMessage('status', data.content);
                 }
-            });
+                break;
+                
+            case 'thinking':
+                // AI is thinking
+                isThinking.set(true);
+                thinkingContent.set(data.content);
+                if (data.meta?.tokens) {
+                    thinkingTokens.set(data.meta.tokens);
+                }
+                break;
+                
+            case 'assistant':
+                // AI response
+                isThinking.set(false);
+                addMessage('assistant', data.content);
+                break;
+                
+            case 'cost':
+                // Cost update
+                if (data.meta) {
+                    sessionCost.set(data.meta.session_cost || 0);
+                    sessionTokens.set(data.meta.session_tokens || 0);
+                }
+                break;
+                
+            case 'error':
+                addMessage('error', data.content);
+                break;
+        }
+    }
 
-            console.log('Session event listeners setup complete');
+    async function ensureServerRunning() {
+        if (serverStatus === 'running') return true;
+        
+        // Try to start via Tauri (desktop app mode)
+        try {
+            await startServer(serverPort);
+            serverStatus = 'running';
+            return true;
         } catch (error) {
-            console.error('Failed to setup session event listeners:', error);
+            // Tauri not available - web dev mode
+            // Assume server is already running externally
+            console.log('Tauri not available, assuming external server on port', serverPort);
+            serverStatus = 'running';
+            return true;
         }
     }
 
-    function addStreamingOutput(content, type) {
-        // Extract cost information if present
-        const costMatch = content.match(/cost:\s*\$(\d+\.?\d*)/i);
-        if (costMatch) {
-            const cost = parseFloat(costMatch[1]);
-            const sessionName = sessionConfig?.name || sessionConfig?.resume;
-            if (sessionName && cost > 0) {
-                updateSessionCost(sessionName, cost);
-                console.log(`Updated session ${sessionName} cost: $${cost}`);
-            }
+    async function connectToServer() {
+        if (!await ensureServerRunning()) return;
+        
+        // If already connected, just re-register the handler
+        if (websocket.isConnected()) {
+            websocket.onMessage(handleWebSocketMessage);
+            return;
         }
-
-        // If this is the first output for a new response, create a new streaming message
-        if (!$currentStreamingMessage) {
-            currentStreamingMessage.set(true);
-            streamingBuffer.set('');
-        }
-
-        // Add content to buffer
-        streamingBuffer.update(buffer => buffer + content + '\n');
-
-        // If this looks like end of response (empty line or session prompt), finalize
-        if (content.trim() === '' || content.includes('> ') || content.includes('Session saved')) {
-            finalizeStreamingMessage();
+        
+        connectionState.set('connecting');
+        
+        try {
+            await websocket.connect(`ws://127.0.0.1:${serverPort}`, { autoReconnect: true });
+            connectionState.set('connected');
+            websocket.onMessage(handleWebSocketMessage);
+        } catch (error) {
+            console.error('Failed to connect:', error);
+            connectionState.set('disconnected');
+            addMessage('error', `Failed to connect to server: ${error}`);
         }
     }
 
-    function finalizeStreamingMessage() {
-        if ($currentStreamingMessage) {
-            // Add the final streaming message to the messages list
-            messages.update(msgs => [...msgs, {
-                type: 'assistant',
-                content: $streamingBuffer
-            }]);
-
-            currentStreamingMessage.set(null);
-            streamingBuffer.set('');
-        }
-    }
-
-    function updateSessionCost(sessionName, cost) {
-        sessionHistory.update(history => {
-            const session = history.find(s => s.name === sessionName);
-            if (session) {
-                session.totalCost = cost;
-                session.lastUsed = new Date().toISOString();
-            }
-            return history;
-        });
+    async function disconnectFromServer() {
+        websocket.disconnect();
+        connectionState.set('disconnected');
+        serverSessionId.set(null);
     }
 
     onMount(async () => {
-        console.log('=== Initializing App ===');
-
-        // Initialize welcome message
-        messages.set([{
-            type: 'system',
-            content: '🚀 Welcome to <strong>Octomind UI</strong>! Create a new session or resume an existing one to start chatting with your AI development assistant.'
-        }]);
-
-        // Setup event listeners for session streaming
-        await setupSessionEventListeners();
-
-        console.log('App initialized successfully');
+        // Check if server is already running
+        try {
+            const running = await isServerRunning();
+            if (running) {
+                serverStatus = 'running';
+            }
+        } catch (e) {
+            // Ignore
+        }
+        
+        // Don't auto-connect - wait for user to create/resume session
+        // The connectToServer will be called when SessionForm dispatches 'connect'
     });
+
+    onDestroy(async () => {
+        await disconnectFromServer();
+    });
+
+    // Reactive: connection status from store
+    $: connectionStatus = $connectionState;
 </script>
 
-<div class="container">
+<div class="app-container">
     <div class="sidebar">
-        <h2>🤖 Octomind Sessions</h2>
-        <SessionForm />
-        <SessionList />
+        <div class="sidebar-header">
+            <h1>🤖 Octomind</h1>
+            <div class="connection-status {connectionStatus}">
+                <span class="status-dot"></span>
+                <span class="status-text">
+                    {#if connectionStatus === 'connected'}
+                        Connected
+                    {:else if connectionStatus === 'connecting'}
+                        Connecting...
+                    {:else}
+                        Disconnected
+                    {/if}
+                </span>
+            </div>
+        </div>
+        
+        <SessionForm on:connect={connectToServer} />
+        <SessionList on:connect={connectToServer} />
     </div>
 
     <div class="main-content">

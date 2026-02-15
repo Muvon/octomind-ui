@@ -29,15 +29,15 @@ export async function initializeTauri() {
 
 export async function getCurrentDirectory() {
     try {
-        if (!window.__TAURI__ || !window.__TAURI__.tauri) {
-            return '/Users/dk/Work/dev/muvon/octomind'; // Fallback
+        if (!window.__TAURI__ || !window.__TAURI__.core) {
+            return process.cwd() || '/home/box/work/muvon/octomind';
         }
 
-        const dirs = await window.__TAURI__.tauri.invoke('list_directories');
+        const dirs = await window.__TAURI__.core.invoke('list_directories');
         return dirs[0] || '';
     } catch (error) {
         console.error('Failed to get current directory:', error);
-        return '/Users/dk/Work/dev/muvon/octomind'; // Fallback
+        return '/home/box/work/muvon/octomind';
     }
 }
 
@@ -45,26 +45,8 @@ export async function selectDirectory() {
     try {
         console.log('=== Testing Directory Selection ===');
 
-        // First try the Tauri dialog API
-        if (window.__TAURI__ && window.__TAURI__.dialog && window.__TAURI__.dialog.open) {
-            console.log('Trying Tauri dialog API...');
-
-            const selected = await window.__TAURI__.dialog.open({
-                directory: true,
-                multiple: false,
-                title: 'Select Working Directory'
-            });
-
-            if (selected && selected !== null) {
-                return selected;
-            }
-        }
-
-        // Fallback to native command
-        console.log('Trying native directory selection...');
-        if (window.__TAURI__ && window.__TAURI__.tauri) {
-            const selected = await window.__TAURI__.tauri.invoke('select_directory_native');
-
+        if (window.__TAURI__ && window.__TAURI__.core) {
+            const selected = await window.__TAURI__.core.invoke('select_directory_native');
             if (selected && selected !== null) {
                 return selected;
             }
@@ -83,10 +65,8 @@ export function generateSessionName(directory, customName = null) {
         return customName.trim();
     }
 
-    // Extract basename from directory path
     const basename = directory.split('/').pop() || directory.split('\\\\').pop() || 'unknown';
 
-    // Format: ui-YYYYMMDD-HHMMSS-basename
     const now = new Date();
     const ymd = now.getFullYear().toString() +
                (now.getMonth() + 1).toString().padStart(2, '0') +
@@ -100,18 +80,33 @@ export function generateSessionName(directory, customName = null) {
 
 export function formatMessage(content) {
     if (typeof content === 'string') {
-        // Enhanced markdown-like formatting for octomind responses
         return content
-            // Handle code blocks first (multiline)
-            .replace(/```([^`]+)```/g, '<pre><code>$1</code></pre>')
-            // Handle inline code
+            .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
-            // Handle bold text
-            .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
-            // Handle italic text
-            .replace(/\\*([^*]+)\\*/g, '<em>$1</em>')
-            // Handle line breaks
-            .replace(/\\n/g, '<br>');
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/\n/g, '<br>');
     }
     return content;
+}
+
+export async function startServer(port = 8080) {
+    if (!window.__TAURI__ || !window.__TAURI__.core) {
+        throw new Error('Tauri not available');
+    }
+    return await window.__TAURI__.core.invoke('start_octomind_server', { port });
+}
+
+export async function stopServer() {
+    if (!window.__TAURI__ || !window.__TAURI__.core) {
+        throw new Error('Tauri not available');
+    }
+    return await window.__TAURI__.core.invoke('stop_octomind_server');
+}
+
+export async function isServerRunning() {
+    if (!window.__TAURI__ || !window.__TAURI__.core) {
+        return false;
+    }
+    return await window.__TAURI__.core.invoke('is_server_running');
 }

@@ -1,24 +1,14 @@
 <script>
-    import { currentSessionId, messages, isConnected } from '../stores.js';
-    import { initializeTauri } from '../lib/tauri.js';
+    import { currentSessionConfig, messages, connectionState, isThinking, addMessage } from '../stores.js';
+    import * as websocket from '../lib/websocket.js';
 
     let messageText = '';
-    let sessionId = null;
-    let connected = false;
-    let inputDisabled = true;
 
-    currentSessionId.subscribe(value => {
-        sessionId = value;
-        inputDisabled = !value;
-    });
-
-    isConnected.subscribe(value => {
-        connected = value;
-        inputDisabled = !value || !sessionId;
-    });
+    // Reactive: input is disabled when no session, not connected, or thinking
+    $: inputDisabled = !$currentSessionConfig || $connectionState !== 'connected' || $isThinking;
 
     async function sendMessage() {
-        if (!sessionId) {
+        if (!$currentSessionConfig) {
             alert('No active session');
             return;
         }
@@ -27,25 +17,15 @@
         if (!message) return;
 
         // Add user message to chat
-        messages.update(msgs => [...msgs, { type: 'user', content: message }]);
+        addMessage('user', message);
         messageText = '';
-        inputDisabled = true;
 
         try {
-            await initializeTauri();
-            const { invoke } = window.__TAURI__.tauri;
-
-            // Send message to the persistent session process
-            await invoke('send_message_to_session', {
-                sessionId: sessionId,
-                message: message
-            });
-
+            // Send via WebSocket
+            websocket.send({ type: 'input', content: message });
         } catch (error) {
             console.error('Failed to send message:', error);
-            messages.update(msgs => [...msgs, { type: 'error', content: `Error: ${error}` }]);
-        } finally {
-            inputDisabled = false;
+            addMessage('error', `Failed to send message: ${error}`);
         }
     }
 
@@ -55,24 +35,38 @@
             sendMessage();
         }
     }
+
+    function handleKeyDown(event) {
+        // Cmd/Ctrl + Enter to send
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+            event.preventDefault();
+            sendMessage();
+        }
+    }
 </script>
 
 <div class="input-area">
     <div class="input-container">
-        <input
-            type="text"
+        <textarea
             class="message-input"
-            placeholder="Type your message..."
+            placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
             bind:value={messageText}
             on:keypress={handleKeyPress}
+            on:keydown={handleKeyDown}
             disabled={inputDisabled}
-        >
+            rows="1"
+        ></textarea>
         <button
-            class="btn"
+            class="send-btn"
             on:click={sendMessage}
             disabled={inputDisabled}
         >
-            💬 Send
+            {#if $isThinking}
+                <span class="thinking-spinner" style="width: 14px; height: 14px;"></span>
+            {:else}
+                💬
+            {/if}
+            Send
         </button>
     </div>
 </div>
