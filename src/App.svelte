@@ -69,32 +69,21 @@
                     });
                 }
                 // Show command output without success message text
-                const hasCommandData = data.meta?.data || 
-                                       data.meta?.commands || 
-                                       data.meta?.command_type === 'info' ||
-                                       data.meta?.command_type === 'cache' ||
-                                       data.meta?.command_type === 'report' ||
-                                       data.meta?.command_type === 'help' ||
-                                       data.meta?.command_type === 'plan' ||
-                                       data.meta?.command_type === 'context' ||
-                                       data.meta?.command_type === 'list' ||
-                                       data.meta?.command_type === 'role' ||
-                                       data.meta?.command_type === 'model' ||
-                                       data.meta?.command_type === 'workflow' ||
-                                       data.command_type === 'info' ||
-                                       data.command_type === 'cache' ||
-                                       data.command_type === 'report' ||
-                                       data.command_type === 'help' ||
-                                       data.command_type === 'plan' ||
-                                       data.command_type === 'context' ||
-                                       data.command_type === 'list' ||
-                                       data.command_type === 'role' ||
-                                       data.command_type === 'model' ||
-                                       data.command_type === 'workflow';
+                // Command data is nested inside data.data
+                const commandData = data.data;
+                const hasCommandData = commandData && (
+                    commandData.command_type ||
+                    commandData.commands ||
+                    commandData.servers ||
+                    commandData.tools ||
+                    commandData.statistics ||
+                    commandData.sessions ||
+                    commandData.entries ||
+                    commandData.workflows
+                );
                 
                 if (hasCommandData) {
-                    // Merge data at root level with meta for rendering
-                    const commandData = { ...data.meta, ...data };
+                    // Pass commandData as the message data for rendering
                     addMessage('status', '', commandData);
                 } else if (data.content && !data.content.includes('executed successfully')) {
                     addMessage('status', data.content, data.meta || {});
@@ -105,7 +94,7 @@
                 // AI is thinking
                 isThinking.set(true);
                 thinkingContent.set(data.content || '');
-                if (data.meta?.tokens) {
+                if (data.tokens) {
                     thinkingTokens.set(data.meta.tokens);
                 }
                 break;
