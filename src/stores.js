@@ -13,6 +13,7 @@ export const messages = writable([]);
 export const isThinking = writable(false);
 export const thinkingContent = writable('');
 export const thinkingTokens = writable(0);
+export const isSending = writable(false);
 
 // Cost tracking
 export const sessionCost = writable(0);
@@ -54,16 +55,30 @@ sessionHistory.subscribe(value => {
     }
 });
 
-// Helper: Add message to chat
+// Helper: Add message to chat (with deduplication)
 export function addMessage(type, content, meta = {}) {
-    messages.update(msgs => [...msgs, {
-        id: crypto.randomUUID(),
-        type,
-        content,
-        timestamp: Date.now(),
-        ...meta
-    }]);
+    messages.update(msgs => {
+        // Deduplicate: skip if same content was added in last 1 second
+        const now = Date.now();
+        const recent = msgs.find(m => 
+            m.content === content && 
+            m.type === type && 
+            (now - m.timestamp) < 1000
+        );
+        if (recent) {
+            console.log('Skipping duplicate message:', type, content.substring(0, 50));
+            return msgs;
+        }
+        return [...msgs, {
+            id: crypto.randomUUID(),
+            type,
+            content,
+            timestamp: now,
+            ...meta
+        }];
+    });
 }
+
 
 // Helper: Clear messages
 export function clearMessages() {
@@ -101,4 +116,5 @@ export function resetSession() {
     isThinking.set(false);
     thinkingContent.set('');
     thinkingTokens.set(0);
+    isSending.set(false);
 }

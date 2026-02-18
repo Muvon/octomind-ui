@@ -107,26 +107,10 @@
 </script>
 
 <div class="session-form">
-    <h3>✨ New Session</h3>
+    <h3>New Session</h3>
 
     <div class="form-group">
-        <label for="session-name">Session Name (optional)</label>
-        <input
-            type="text"
-            id="session-name"
-            placeholder="Auto-generated if empty"
-            value={form.sessionName}
-            on:input={(e) => updateForm('sessionName', e.target.value)}
-        >
-        {#if sessionNamePreview}
-            <small class="text-muted" style="margin-top: 4px; display: block; font-size: 11px;">
-                {sessionNamePreview}
-            </small>
-        {/if}
-    </div>
-
-    <div class="form-group">
-        <label for="directory">Working Directory</label>
+        <label for="directory">Directory</label>
         <div class="directory-input-group">
             <input
                 type="text"
@@ -135,57 +119,33 @@
                 value={form.directory}
                 on:input={(e) => updateForm('directory', e.target.value)}
             >
-            <button class="btn-icon" on:click={handleSelectDirectory} title="Browse">
-                📁
-            </button>
+            <button class="btn-icon" on:click={handleSelectDirectory} title="Browse">...</button>
         </div>
     </div>
 
     <div class="form-group">
-        <label for="role">Role</label>
-        <select id="role" value={form.role} on:change={(e) => updateForm('role', e.target.value)}>
-            <option value="developer">Developer</option>
-            <option value="assistant">Assistant</option>
-        </select>
+        <label for="session-name">Name <span style="color: var(--text-tertiary);">(optional)</span></label>
+        <input
+            type="text"
+            id="session-name"
+            placeholder="Auto-generated if empty"
+            value={form.sessionName}
+            on:input={(e) => updateForm('sessionName', e.target.value)}
+        >
     </div>
 
     <div class="form-group">
-        <label for="model">Model (optional)</label>
+        <label for="model">Model <span style="color: var(--text-tertiary);">(optional)</span></label>
         <input
             type="text"
             id="model"
-            placeholder="e.g., openrouter:anthropic/claude-3.5-sonnet"
+            placeholder="claude-3.5-sonnet"
             value={form.model}
             on:input={(e) => updateForm('model', e.target.value)}
         >
     </div>
 
-    <div style="display: flex; gap: 12px;">
-        <div class="form-group" style="flex: 1;">
-            <label for="temperature">Temperature</label>
-            <input
-                type="number"
-                id="temperature"
-                min="0"
-                max="2"
-                step="0.1"
-                value={form.temperature}
-                on:input={(e) => updateForm('temperature', parseFloat(e.target.value) || 0.7)}
-            >
-        </div>
-        <div class="form-group" style="flex: 1;">
-            <label for="max-tokens">Max Tokens</label>
-            <input
-                type="number"
-                id="max-tokens"
-                placeholder="Default"
-                value={form.maxTokens}
-                on:input={(e) => updateForm('maxTokens', e.target.value)}
-            >
-        </div>
-    </div>
-
     <button class="btn" on:click={createSession} style="width: 100%;">
-        🚀 Create Session
+        Create Session
     </button>
 </div>

@@ -1,5 +1,5 @@
 <script>
-    import { currentSessionConfig, messages, connectionState, isThinking, addMessage } from '../stores.js';
+    import { currentSessionConfig, messages, connectionState, isThinking, isSending, addMessage } from '../stores.js';
     import * as websocket from '../lib/websocket.js';
 
     let messageText = '';
@@ -20,12 +20,25 @@
         addMessage('user', message);
         messageText = '';
 
+        // Show sending animation
+        isSending.set(true);
+
         try {
-            // Send via WebSocket
-            websocket.send({ type: 'input', content: message });
+            // Check if it's a command (starts with /)
+            if (message.startsWith('/')) {
+                // Parse command: /command arg1 arg2 -> command='command', args=['arg1', 'arg2']
+                const parts = message.slice(1).trim().split(/\s+/);
+                const command = parts[0];
+                const args = parts.slice(1);
+                websocket.sendCommand(command, args, $currentSessionConfig.name);
+            } else {
+                // Regular message as message type
+                websocket.send({ type: 'message', content: message }, $currentSessionConfig.name);
+            }
         } catch (error) {
             console.error('Failed to send message:', error);
             addMessage('error', `Failed to send message: ${error}`);
+            isSending.set(false);
         }
     }
 
@@ -49,7 +62,7 @@
     <div class="input-container">
         <textarea
             class="message-input"
-            placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+            placeholder="Message..."
             bind:value={messageText}
             on:keypress={handleKeyPress}
             on:keydown={handleKeyDown}
@@ -64,9 +77,8 @@
             {#if $isThinking}
                 <span class="thinking-spinner" style="width: 14px; height: 14px;"></span>
             {:else}
-                💬
+                Send
             {/if}
-            Send
         </button>
     </div>
 </div>

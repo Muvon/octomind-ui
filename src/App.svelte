@@ -9,6 +9,7 @@
         isThinking,
         thinkingContent,
         thinkingTokens,
+        isSending,
         sessionCost,
         sessionTokens,
         sessionForm,
@@ -34,6 +35,17 @@
     function handleWebSocketMessage(data) {
         console.log('WS Message:', data);
         
+        // Stop sending animation when we receive any response
+        isSending.set(false);
+        
+        // Skip if no type
+        if (!data?.type) {
+            console.warn('Received message without type:', data);
+            return;
+        }
+        
+        console.log('WS Message type:', data.type, 'fields:', Object.keys(data));
+        
         switch (data.type) {
             case 'status':
                 // Server status message
@@ -56,16 +68,43 @@
                         return config;
                     });
                 }
-                // Only add status message if it has content
-                if (data.content) {
-                    addMessage('status', data.content);
+                // Show command output without success message text
+                const hasCommandData = data.meta?.data || 
+                                       data.meta?.commands || 
+                                       data.meta?.command_type === 'info' ||
+                                       data.meta?.command_type === 'cache' ||
+                                       data.meta?.command_type === 'report' ||
+                                       data.meta?.command_type === 'help' ||
+                                       data.meta?.command_type === 'plan' ||
+                                       data.meta?.command_type === 'context' ||
+                                       data.meta?.command_type === 'list' ||
+                                       data.meta?.command_type === 'role' ||
+                                       data.meta?.command_type === 'model' ||
+                                       data.meta?.command_type === 'workflow' ||
+                                       data.command_type === 'info' ||
+                                       data.command_type === 'cache' ||
+                                       data.command_type === 'report' ||
+                                       data.command_type === 'help' ||
+                                       data.command_type === 'plan' ||
+                                       data.command_type === 'context' ||
+                                       data.command_type === 'list' ||
+                                       data.command_type === 'role' ||
+                                       data.command_type === 'model' ||
+                                       data.command_type === 'workflow';
+                
+                if (hasCommandData) {
+                    // Merge data at root level with meta for rendering
+                    const commandData = { ...data.meta, ...data };
+                    addMessage('status', '', commandData);
+                } else if (data.content && !data.content.includes('executed successfully')) {
+                    addMessage('status', data.content, data.meta || {});
                 }
                 break;
                 
             case 'thinking':
                 // AI is thinking
                 isThinking.set(true);
-                thinkingContent.set(data.content);
+                thinkingContent.set(data.content || '');
                 if (data.meta?.tokens) {
                     thinkingTokens.set(data.meta.tokens);
                 }
@@ -74,7 +113,9 @@
             case 'assistant':
                 // AI response
                 isThinking.set(false);
-                addMessage('assistant', data.content);
+                if (data.content) {
+                    addMessage('assistant', data.content);
+                }
                 break;
                 
             case 'cost':
@@ -86,11 +127,12 @@
                 break;
                 
             case 'error':
-                addMessage('error', data.content);
+                addMessage('error', data.content || 'Unknown error');
                 break;
         }
     }
 
+    // Ensure server is running
     async function ensureServerRunning() {
         if (serverStatus === 'running') return true;
         
@@ -108,6 +150,11 @@
         }
     }
 
+    // Send session config to server
+    async function sendSessionConfig() {
+        // Not needed - server handles session via session_id in messages
+    }
+
     async function connectToServer() {
         if (!await ensureServerRunning()) return;
         
@@ -123,6 +170,11 @@
             await websocket.connect(`ws://127.0.0.1:${serverPort}`, { autoReconnect: true });
             connectionState.set('connected');
             websocket.onMessage(handleWebSocketMessage);
+            
+            // Send session message to register with server
+            if ($currentSessionConfig?.name) {
+                websocket.sendSession($currentSessionConfig.name);
+            }
         } catch (error) {
             console.error('Failed to connect:', error);
             connectionState.set('disconnected');
@@ -162,7 +214,7 @@
 <div class="app-container">
     <div class="sidebar">
         <div class="sidebar-header">
-            <h1>🤖 Octomind</h1>
+            <h1>Octomind</h1>
             <div class="connection-status {connectionStatus}">
                 <span class="status-dot"></span>
                 <span class="status-text">
@@ -171,7 +223,7 @@
                     {:else if connectionStatus === 'connecting'}
                         Connecting...
                     {:else}
-                        Disconnected
+                        Offline
                     {/if}
                 </span>
             </div>

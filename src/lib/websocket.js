@@ -23,13 +23,15 @@ export function connect(url = 'ws://127.0.0.1:8080', options = {}) {
         };
 
         ws.onmessage = (event) => {
+            console.log('WS RAW:', event.data);
             try {
                 const data = JSON.parse(event.data);
                 if (messageHandler) {
                     messageHandler(data);
                 }
             } catch (err) {
-                console.error('Failed to parse WebSocket message:', err);
+                console.error('Failed to parse WebSocket message:', err, 'Raw:', event.data.slice(0, 200));
+                // Don't call handler on parse error to avoid duplicate messages
             }
         };
 
@@ -64,15 +66,38 @@ export function disconnect() {
     messageHandler = null;
 }
 
-export function send(message) {
+export function send(message, sessionId = null) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
         throw new Error('WebSocket not connected');
     }
     
     const payload = typeof message === 'string' 
-        ? { type: 'input', content: message }
+        ? { type: 'message', content: message }
         : message;
     
+    // Add session_id if provided
+    if (sessionId) {
+        payload.session_id = sessionId;
+    }
+    
+    ws.send(JSON.stringify(payload));
+}
+
+export function sendSession(sessionId) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        throw new Error('WebSocket not connected');
+    }
+    ws.send(JSON.stringify({ type: 'session', session_id: sessionId }));
+}
+
+export function sendCommand(command, args = [], sessionId = null) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        throw new Error('WebSocket not connected');
+    }
+    const payload = { type: 'command', command, args };
+    if (sessionId) {
+        payload.session_id = sessionId;
+    }
     ws.send(JSON.stringify(payload));
 }
 
