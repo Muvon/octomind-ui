@@ -34,18 +34,18 @@
     // Handle WebSocket messages
     function handleWebSocketMessage(data) {
         console.log('WS Message:', data);
-        
+
         // Stop sending animation when we receive any response
         isSending.set(false);
-        
+
         // Skip if no type
         if (!data?.type) {
             console.warn('Received message without type:', data);
             return;
         }
-        
+
         console.log('WS Message type:', data.type, 'fields:', Object.keys(data));
-        
+
         switch (data.type) {
             case 'status':
                 // Server status message
@@ -81,7 +81,7 @@
                     commandData.entries ||
                     commandData.workflows
                 );
-                
+
                 if (hasCommandData) {
                     // Pass commandData as the message data for rendering
                     addMessage('status', '', commandData);
@@ -89,7 +89,7 @@
                     addMessage('status', data.content, data.meta || {});
                 }
                 break;
-                
+
             case 'thinking':
                 // AI is thinking
                 isThinking.set(true);
@@ -98,7 +98,7 @@
                     thinkingTokens.set(data.meta.tokens);
                 }
                 break;
-                
+
             case 'assistant':
                 // AI response
                 isThinking.set(false);
@@ -106,7 +106,7 @@
                     addMessage('assistant', data.content);
                 }
                 break;
-                
+
             case 'cost':
                 // Cost update
                 if (data.meta) {
@@ -114,7 +114,7 @@
                     sessionTokens.set(data.meta.session_tokens || 0);
                 }
                 break;
-                
+
             case 'error':
                 addMessage('error', data.content || 'Unknown error');
                 break;
@@ -124,7 +124,7 @@
     // Ensure server is running
     async function ensureServerRunning() {
         if (serverStatus === 'running') return true;
-        
+
         // Try to start via Tauri (desktop app mode)
         try {
             await startServer(serverPort);
@@ -146,20 +146,26 @@
 
     async function connectToServer() {
         if (!await ensureServerRunning()) return;
-        
-        // If already connected, just re-register the handler
+
+        // Clear messages when switching/creating sessions
+        clearMessages();
+
         if (websocket.isConnected()) {
             websocket.onMessage(handleWebSocketMessage);
+            // Switch to the new session on the already-open connection
+            if ($currentSessionConfig?.name) {
+                websocket.sendSession($currentSessionConfig.name);
+            }
             return;
         }
-        
+
         connectionState.set('connecting');
-        
+
         try {
             await websocket.connect(`ws://127.0.0.1:${serverPort}`, { autoReconnect: true });
             connectionState.set('connected');
             websocket.onMessage(handleWebSocketMessage);
-            
+
             // Send session message to register with server
             if ($currentSessionConfig?.name) {
                 websocket.sendSession($currentSessionConfig.name);
@@ -187,7 +193,7 @@
         } catch (e) {
             // Ignore
         }
-        
+
         // Don't auto-connect - wait for user to create/resume session
         // The connectToServer will be called when SessionForm dispatches 'connect'
     });
@@ -217,7 +223,7 @@
                 </span>
             </div>
         </div>
-        
+
         <SessionForm on:connect={connectToServer} />
         <SessionList on:connect={connectToServer} />
     </div>
